@@ -1,3 +1,4 @@
+# %%
 import matplotlib.pyplot as plt
 import numpy
 import networkx as nx
@@ -260,6 +261,7 @@ def DBK(graph, LIMIT, solver_function):
     print("=== Finished DBK Algorithm ===")
     return num_of_atoms, iteration
 
+# %%
 
 def find_separators_within_size(graph, size_limit):
     separators = []
@@ -297,8 +299,8 @@ def decompose_graph(graph, nodes_to_remove):
     for component in connected_components:
         component = component.union(nodes_to_remove)
         component_graph = og_graph.subgraph(component)
+        component_graph = get_largest_component(component_graph)
         result_components.append(component_graph)
-
     return result_components
 
 
@@ -309,60 +311,11 @@ def maximum_clique_exact_solve_np_hard(G):
         if len(cl) == max_clique_number:
             return cl
 
-
-# Example usage:
-# Creating a sample graph
-random.seed(10)
+# %%
 G = nx.gnp_random_graph(60, 0.6)
-G = get_largest_component(G)
-G_2 = nx.gnp_random_graph(50, 0.4)
-G_2 = get_largest_component(G_2)
-G = nx.relabel_nodes(G, {n: str(n) if n == 0 else 'a-'+str(n)
-                     for n in G.nodes})
-G_2 = nx.relabel_nodes(
-    G_2, {n: str(n) if n == 0 else 'b-'+str(n) for n in G_2.nodes})
-
-"""c = nx.compose(G,G_2)
-
-nx.draw_networkx(c,with_labels=True,node_size=500)
-plt.show()
-# Finding the minimum separators
-x = list(nx.all_node_cuts(c))
-# print("Minimum separators:", x)
-print(len(x))
-for i in x:
-  print(i)
-
-result = remove_overlapping_sets(x)[0]
-print("Sets without any overlapping elements:", result)
-
-graphs = decompose_graph(c, result)
-
-# Plotting each graph in the list
-plt.figure(figsize=(10, 4))
-for idx, graph in enumerate(graphs):
-    plt.subplot(1, len(graphs), idx + 1)
-    nx.draw(graph, with_labels=True, font_weight='bold')
-    plt.title(f"Graph {idx + 1}")
-plt.show()"""
-
 num_of_subgraphs, num_of_iterations = DBK(
     G, 20, maximum_clique_exact_solve_np_hard)
 print("Number of iterations to termination:", num_of_iterations)
 print("Resulting number of subgraphs:", num_of_subgraphs)
 
-
-def maximum_clique_exact_solve_np_hard(G):
-    max_clique_number = nx.graph_clique_number(G)
-    cliques = nx.find_cliques(G)
-    for cl in cliques:
-        if len(cl) == max_clique_number:
-            return cl
-
-
-for i in range(1):
-    G = nx.gnp_random_graph(random.randint(66, 80), random.uniform(0.01, 0.99))
-    num_of_subgraphs, num_of_iterations = DBK(
-        G, 65, maximum_clique_exact_solve_np_hard)
-    print("Number of iterations to termination:", num_of_iterations)
-    print("Resulting number of subgraphs:", num_of_subgraphs)
+# %%
