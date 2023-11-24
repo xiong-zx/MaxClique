@@ -312,10 +312,9 @@ def maximum_clique_exact_solve_np_hard(G):
             return cl
 
 # %%
-G = nx.gnp_random_graph(60, 0.6)
-num_of_subgraphs, num_of_iterations = DBK(
-    G, 20, maximum_clique_exact_solve_np_hard)
-print("Number of iterations to termination:", num_of_iterations)
-print("Resulting number of subgraphs:", num_of_subgraphs)
-
-# %%
+if __name__ == "__main__":
+    G = nx.gnp_random_graph(60, 0.6)
+    num_of_subgraphs, num_of_iterations = DBK(
+        G, 20, maximum_clique_exact_solve_np_hard)
+    print("Number of iterations to termination:", num_of_iterations)
+    print("Resulting number of subgraphs:", num_of_subgraphs)
