@@ -3,3 +3,5 @@ __pycache__/
 local/
 .idea/
 *.zip
+figures/
+CLUSTER/
