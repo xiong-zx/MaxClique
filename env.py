@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 from stable_baselines3 import A2C
 from stable_baselines3.common.env_util import make_vec_env
 
+
 from utils import mc_lower_bound, decompose_graph, k_core_reduction
 
 MAX_NODES = 200
@@ -144,6 +145,7 @@ class VertexSeparatorEnv(gym.Env):
                 edge_index = data.edge_index.to('cpu').numpy()
                 self.current_graph = nx.from_edgelist(
                     edge_index.transpose().tolist())
+                num_nodes = len(self.current_graph)
                 self.current_graph.graph['name'] = data.name  # todo
                 if self.node_embedding and data.x is not None:
                     node_embeddings = np.zeros(
@@ -151,9 +153,9 @@ class VertexSeparatorEnv(gym.Env):
                     node_embeddings[:num_nodes, :] = data.x.to('cpu').numpy()
                     self.current_graph.graph['node_embeddings'] = node_embeddings
             elif isinstance(data, nx.Graph):
+                num_nodes = len(self.current_graph)
                 self.current_graph = self.dataset[self.graph_index]
             
-            num_nodes = len(self.current_graph)
             edges = nx.to_numpy_array(self.current_graph)
             adjacency_matrix = np.zeros(
                 (MAX_NODES, MAX_NODES), dtype=np.float32)
@@ -178,6 +180,19 @@ class VertexSeparatorEnv(gym.Env):
             self.info[key] = info
         return obs, reward, self.done, self.truncated, info
 
+class NamedGNNBenchmarkDataset(torch_geometric.data.Dataset):
+    def __init__(self, dataset):
+        self.dataset = dataset
+        super().__init__(root=None, transform=None, pre_transform=None)
+
+    def len(self):
+        return len(self.dataset)
+
+    def get(self, idx):
+        data = self.dataset[idx]
+        data.name = f"graph_{idx}"
+        return data
+    
 class Dataset(torch_geometric.data.Dataset):
     def __init__(self, data_list, root, transform=None, pre_transform=None):
         super(Dataset, self).__init__(root, transform, pre_transform)
@@ -191,9 +206,7 @@ class Dataset(torch_geometric.data.Dataset):
         G.graph['name'] = self.data_list[idx].split('/')[-1].rsplit('.')[0]
         node_features = {node: [1.0] for node in G.nodes()}
         nx.set_node_attributes(G, node_features, "x")
-
         return G
-
 
 # %%
 if __name__ == "__main__":
@@ -201,18 +214,16 @@ if __name__ == "__main__":
     np.random.seed(483)
     _root = os.path.abspath(os.path.dirname(__file__))
 
-    train_dataset = GNNBenchmarkDataset(root=os.path.join(
+    _train_dataset = GNNBenchmarkDataset(root=os.path.join(
         _root, 'data'), name='CLUSTER', split='train')
-    test_dataset = GNNBenchmarkDataset(root=os.path.join(
-        _root, 'data'), name='CLUSTER', split='test')
-    val_dataset = GNNBenchmarkDataset(root=os.path.join(
-        _root, 'data'), name='CLUSTER', split='val')
-    data_dir = os.path.join(_root, 'data', '60', '0.1')
+    train_dataset = NamedGNNBenchmarkDataset(_train_dataset)
+
+    data_dir = os.path.join(_root, 'data', '200', '0.1')
     data_list = [os.path.join(data_dir, f) for f in os.listdir(data_dir)]
     dataset = Dataset(data_list=data_list, root=None)
 
     train_env = make_vec_env(lambda: VertexSeparatorEnv(
-        dataset, node_embedding=False), n_envs=1)
+        train_dataset, node_embedding=True), n_envs=1)
 
     model = A2C("MultiInputPolicy", train_env, verbose=0)
     total_timesteps = 100000
@@ -254,7 +265,7 @@ if __name__ == "__main__":
     plt.ylabel('Number of Node Reduced')
     plt.title('Average Node Reduced by Epoch')
     plt.legend()
-    plt.show()
+    plt.savefig('figures/line_node_reduced_200.png')
     plt.close()
 
     best_epoch = np.argmax(avg_node_reduced)
@@ -267,7 +278,7 @@ if __name__ == "__main__":
     plt.xlabel('Number of Node Reduced')
     plt.ylabel('Number of Graphs')
     plt.title('Histogram of Node Reduced')
-    plt.show()
+    plt.savefig('figures/hist_node_reduced_200.png')
     plt.close()
     
     print("Average Node Reduced:", mean_node_reduced)
