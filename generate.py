@@ -4,8 +4,8 @@ import itertools
 import os
 
 density = [0.1,0.5]
-nodes = [60]
-num = 1000
+nodes = [600,700,800,900,1500,2000]
+num = 100
 
 root_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -36,14 +36,14 @@ from networkx.algorithms.approximation import max_clique
 import pandas as pd
 import matplotlib.pyplot as plt
 
-density = [0.01,0.1,0.5]
-nodes = [200]
+density = [0.1,0.5]
+nodes = [60]
 num = 10
 
 root_dir = os.path.dirname(os.path.abspath(__file__))
 for n, d in itertools.product(nodes, density):
-    if os.path.exists(os.path.join(root_dir,f"examples/{n}/max_cliques.csv")):
-        max_cliques = pd.read_csv(os.path.join(root_dir,f"examples/{n}/max_cliques.csv"), index_col=0)
+    if os.path.exists(os.path.join(root_dir,f"examples/{n}/{d}/max_cliques.csv")):
+        max_cliques = pd.read_csv(os.path.join(root_dir,f"examples/{n}/{d}max_cliques.csv"), index_col=0)
     else:
         max_cliques = {}
         dir_name = os.path.join(root_dir,f"examples/{n}/{d}")
@@ -57,4 +57,6 @@ for n, d in itertools.product(nodes, density):
             max_cliques[f"{n}_{d}_{i}"] = len(max_clique(G))
 
         max_cliques = pd.DataFrame.from_dict(max_cliques, orient='index', columns=['max_clique'])
-        max_cliques.to_csv(os.path.join(root_dir,f"examples/{n}/max_cliques.csv"))
+        max_cliques.to_csv(os.path.join(root_dir,f"examples/{n}/{d}/max_cliques.csv"))
+
+# %%

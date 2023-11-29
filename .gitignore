@@ -5,3 +5,5 @@ local/
 *.zip
 figures/
 CLUSTER/
+data/
+*.csv

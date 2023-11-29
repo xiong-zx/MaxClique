@@ -114,6 +114,27 @@ def lowest_degree_vertex(graph):
         if graph.degree(i) == minimum:
             return i
 
+def highest_degree_vertex(graph):
+    """
+    INPUT:
+     - "graph" Networkx Undirected Graph
+    OUTPUT:
+     - "i" node that has the highest degree in the graph
+    """
+    degrees = [graph.degree(a) for a in list(graph.nodes())]
+    maximum = max(degrees)
+    for i in list(graph.nodes()):
+        if graph.degree(i) == maximum:
+            return i
+        
+def random_vertex(graph):
+    """
+    INPUT:
+     - "graph" Networkx Undirected Graph
+    OUTPUT:
+     - "i" node that has the highest degree in the graph
+    """
+    return random.choice(list(graph.nodes()))
 
 def remove_zero_degree_nodes(graph):
     """
