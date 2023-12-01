@@ -1,9 +1,9 @@
 __pycache__/
 .vscode/
-local/
 .idea/
 *.zip
 figures/
 CLUSTER/
 data/
+examples/
 *.csv

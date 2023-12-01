@@ -3,6 +3,7 @@ import networkx as nx
 import gymnasium as gym
 from gymnasium.spaces import Box, MultiBinary, Dict
 import numpy as np
+import pandas as pd
 import os
 import random
 import torch_geometric
@@ -16,9 +17,9 @@ from stable_baselines3.common.env_util import make_vec_env, VecEnv
 
 from utils import mc_lower_bound, decompose_graph, k_core_reduction
 
-MAX_NODES = 1000
-STEP_PENALTY = -0.01
-SEPARATOR_PENALTY = -0.1
+MAX_NODES = 300
+STEP_PENALTY = -0.1
+SEPARATOR_PENALTY = -1
 MASK_PENALTY = -1
 
 # %%
@@ -119,6 +120,9 @@ class VertexSeparatorEnv(gym.Env):
                 g, len(k)) for g in decomposed_graphs]
             node_reduced = len(self.current_graph) - \
                 sum([len(g) for g in decomposed_graphs])
+            # if len(decomposed_graphs) != 2:
+            #     print(f"The number of subgraphs is {len(decomposed_graphs)}.")
+            #     print(f"The separator size is {len(self.separator)}.")
             reward += node_reduced
             reward += SEPARATOR_PENALTY * len(self.separator)
             return reward, {
@@ -217,6 +221,56 @@ class Dataset(torch_geometric.data.Dataset):
         nx.set_node_attributes(G, node_features, "x")
         return G
 
+# def plot_test(info: dict, figure_dir: str):
+#     """
+#     Visualize the testing process.
+#     Generate the following figures:
+#     1. Average Node Reduced by Epoch: the average number of nodes reduced in each epoch.
+#     2. Average Separator Size by Epoch: the average size of the separator in each epoch.
+#     3. Histogram of Node Reduced: the distribution of the number of nodes reduced in the best epoch.
+#     4. Histogram of Separator Size: the distribution of the size of the separator in the best epoch (most nodes are reduced).
+#     """
+#     graph_name_to_index = {}
+#     index_counter = 0
+#     total_epochs = 0
+#     for (graph_name, e), _ in info.items():
+#         if e >= total_epochs:
+#             total_epochs = e+1
+#         if graph_name not in graph_name_to_index:
+#             graph_name_to_index[graph_name] = index_counter
+#             index_counter += 1
+
+#     total_graphs = len(graph_name_to_index)
+#     node_reduced_matrix = np.zeros((total_graphs, total_epochs))
+#     steps_matrix = np.zeros((total_graphs, total_epochs))
+#     separator_size = np.zeros((total_graphs, total_epochs))
+
+#     for (graph_name, epoch), v in info.items():
+#         graph_index = graph_name_to_index[graph_name]
+#         node_reduced_matrix[graph_index, epoch] = v['node_reduced']
+#         steps_matrix[graph_index, epoch] = v['steps']
+#         separator_size[graph_index, epoch] = v['separator_size']
+
+#     avg_node_reduced = np.mean(node_reduced_matrix[:, :total_epochs-1], axis=0)
+#     avg_separator_size = np.mean(separator_size[:, :total_epochs-1], axis=0)
+
+#     best_epoch = np.argmax(avg_node_reduced)
+#     best_node_reduced = node_reduced_matrix[:, best_epoch]
+#     mean_best_node_reduced = np.mean(best_node_reduced)
+
+#     best_separator_size = separator_size[:, best_epoch]
+#     mean_best_separator_size = np.mean(best_separator_size)
+
+#     plt.figure(figsize=(10, 6))
+#     plt.plot(avg_node_reduced, label='Average Node Reduced')
+#     plt.xlabel('Epoch')
+#     plt.ylabel('Number of Node Reduced')
+#     plt.title('Average Node Reduced by Epoch')
+#     plt.legend()
+#     plt.savefig(os.path.join(figure_dir, 'test_line_node_reduced.png'))
+#     plt.close()
+
+
 
 def plot_train(info: dict, figure_dir: str):
     """
@@ -300,7 +354,7 @@ def plot_train(info: dict, figure_dir: str):
 
 
 def evaluate_test(info: dict):
-    """Evaluate the test results.
+    """Evaluate the testing results.
     """
     best_results = {}
 
@@ -339,20 +393,20 @@ def train_model(
 def test_model(
     model: stable_baselines3.A2C,
     env: VecEnv,
-    test_steps: int,
+    val_steps: int,
     epoch: int = 1
 ) -> dict:
     obs = env.reset()
     done = False
-    if test_steps is None:
+    if val_steps is None:
         while env.get_attr('epoch')[0] < epoch:
-            action, _states = model.predict(obs, deterministic=True)
+            action, _states = model.predict(obs, deterministic=False)
             obs, rewards, done, info = env.step(action)
             if done:
                 obs = env.reset()
     else:
-        for _ in range(test_steps):
-            action, _states = model.predict(obs, deterministic=True)
+        for _ in range(val_steps):
+            action, _states = model.predict(obs, deterministic=False)
             obs, rewards, done, info = env.step(action)
             if done:
                 obs = env.reset()
@@ -364,9 +418,10 @@ def test_model(
 if __name__ == "__main__":
 
     # hyperparameters
-    total_steps = int(1e5)  # total number of training steps
-    interval = int(1e4)  # number of steps between each test
-    test_steps = 100  # number of steps for each test; None for testing for 1 epoch
+    total_steps = int(5e5)  # total number of training steps
+    interval = int(5e2)  # number of steps between each test
+    val_steps = None  # number of steps for each test; None for validating for 1 epoch
+    test_steps = None # number of steps for each test; None for testing for 1 epoch
     random.seed(42)
     np.random.seed(42)
     
@@ -378,40 +433,55 @@ if __name__ == "__main__":
     # _test_dataset = GNNBenchmarkDataset(root=os.path.join(
     #     _root, 'data'), name='CLUSTER', split='test')
     # train_dataset = NamedGNNBenchmarkDataset(_train_dataset)
-    # test_dataset = NamedGNNBenchmarkDataset(_test_dataset)
+    # val_dataset = NamedGNNBenchmarkDataset(_test_dataset)
 
-    data_dir = os.path.join(_root, 'data', '200', '0.1')
+    data_dir = os.path.join(_root, 'data', '300', '0.1')
     data_list = [os.path.join(data_dir, f) for f in os.listdir(
-        data_dir) if f.endswith('.edgelist')]
+        data_dir) if f.endswith('.edgelist')][:100]
     dataset = Dataset(data_list=data_list, root=None)
     train_dataset = dataset[:int(len(dataset)*0.8)]
-    test_dataset = dataset[int(len(dataset)*0.8):]
+    val_dataset = dataset[int(len(dataset)*0.8):]
+    test_dataset = val_dataset
     
-    # By now, the train_dataset and test_dataset should be ready.
+    # By now, the train_dataset and val_dataset should be ready.
 
     train_env = make_vec_env(lambda: VertexSeparatorEnv(
         dataset=train_dataset, node_embedding=False), n_envs=1)
-    model = A2C("MultiInputPolicy", train_env, verbose=0)
+    test_env = make_vec_env(lambda: VertexSeparatorEnv(
+        dataset=test_dataset, node_embedding=False), n_envs=1)
+    if os.path.exists(os.path.join(data_dir, "a2c_vertex_separator.zip")):
+        msg = input("Model exists. Press Y/y to load the model.")
+        if msg.lower() == 'y':
+            print("Loading model.")
+            model = A2C.load(path=os.path.join(
+                data_dir, "a2c_vertex_separator"), verbose=0)
+            model.env = train_env
+            print("Model loaded.")
+        else:
+            model = A2C("MultiInputPolicy", train_env, verbose=0)
+            print("Created a new model.")
+    else:
+        model = A2C("MultiInputPolicy", train_env, verbose=0)
     best_node_reduced = -np.inf
-    node_reduced_list = []
-    separator_size_list = []
+    val_node_reduced_list = []
+    val_separator_size_list = []
     for i in range(0, total_steps, interval):
         print(f"\n{i}")
         print(f"Training for {interval} steps.")
         _ = train_model(model, train_env, interval)
 
         print(f"Testing.")
-        test_env = make_vec_env(lambda: VertexSeparatorEnv(
-            dataset=test_dataset.shuffle(), node_embedding=False), n_envs=1)
-        test_info = test_model(model, test_env, test_steps)
-        test_env.close()
-        node_reduced, separator_size, _ = evaluate_test(test_info)
-        # tracks the number of nodes reduced during the training process on test dataset
-        node_reduced_list.append(node_reduced)
-        # tracks the size of the separator during the training process on test dataset
-        separator_size_list.append(separator_size)
-        print(f"Testing Node Reduced: {node_reduced}")
-        print(f"Testing Separator Size: {separator_size}")
+        val_env = make_vec_env(lambda: VertexSeparatorEnv(
+            dataset=val_dataset.shuffle(), node_embedding=False), n_envs=1)
+        val_info = test_model(model, val_env, val_steps)
+        val_env.close()
+        node_reduced, separator_size, _ = evaluate_test(val_info)
+        # tracks the number of nodes reduced during the training process on validation dataset
+        val_node_reduced_list.append(node_reduced)
+        # tracks the size of the separator during the training process on validation dataset
+        val_separator_size_list.append(separator_size)
+        print(f"Validating Node Reduced: {node_reduced}")
+        print(f"Validating Separator Size: {separator_size}")
         if node_reduced >= best_node_reduced:
             best_node_reduced = node_reduced
             best_separator_size = separator_size
@@ -424,24 +494,40 @@ if __name__ == "__main__":
     train_info = train_env.get_attr('info')[0]
     plot_train(info=train_info, figure_dir=data_dir)
 
-    # plot the testing data
+    # plot the validating data
     plt.figure(figsize=(10, 6))
-    plt.plot(node_reduced_list)
+    plt.plot(val_node_reduced_list)
     plt.xlabel('Round')
     plt.ylabel('Node Reduced')
-    plt.title('Node Reduced by Epoch on Test Set')
-    plt.savefig(os.path.join(data_dir, 'test_line_node_reduced.png'))
+    plt.title('Node Reduced on Test Set')
+    plt.savefig(os.path.join(data_dir, 'val_line_node_reduced.png'))
     plt.close()
 
     plt.figure(figsize=(10, 6))
-    plt.plot(separator_size_list)
+    plt.plot(val_separator_size_list)
     plt.xlabel('Round')
     plt.ylabel('Separator Size')
-    plt.title('Separator Size by Epoch on Test Set')
-    plt.savefig(os.path.join(data_dir, 'test_line_separator_size.png'))
+    plt.title('Separator Size on Test Set')
+    plt.savefig(os.path.join(data_dir, 'val_line_separator_size.png'))
     plt.close()
-
+    # test the model on the test dataset
+    print(f"Testing on test dataset.")
+    test_info = test_model(model, test_env, val_steps)
+    test_node_reduced, test_separator_size, _ = evaluate_test(test_info)
+    print(f"Testing Node Reduced: {test_node_reduced}")
+    print(f"Testing Separator Size: {test_separator_size}")
+    
     train_env.close()
+    val_env.close()
     test_env.close()
-
+    
+    val_node_reduced_list =  pd.DataFrame(val_node_reduced_list)
+    val_separator_size_list = pd.DataFrame(val_separator_size_list)
+    test_node_reduced = pd.DataFrame([test_node_reduced])
+    test_separator_size = pd.DataFrame([test_separator_size])
+    val_node_reduced_list.to_csv(os.path.join(data_dir, 'val_node_reduced.csv'))
+    val_separator_size_list.to_csv(os.path.join(data_dir, 'val_separator_size.csv'))
+    test_node_reduced.to_csv(os.path.join(data_dir, 'test_node_reduced.csv'))
+    test_separator_size.to_csv(os.path.join(data_dir, 'test_separator_size.csv'))
+    
 # %%

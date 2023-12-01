@@ -4,8 +4,8 @@ import itertools
 import os
 
 density = [0.1,0.5]
-nodes = [600,700,800,900,1500,2000]
-num = 100
+nodes = [50,100]
+num = 1000
 
 root_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -17,7 +17,8 @@ for n, d in itertools.product(nodes, density):
     while i < num:
         file_name = os.path.join(dir_name,f"{i}.edgelist")
         if os.path.exists(file_name):
-            pass
+            i += 1
+            continue
         else:
             G = nx.gnp_random_graph(n, d, directed=False)
             # assert if graph has no isolated nodes

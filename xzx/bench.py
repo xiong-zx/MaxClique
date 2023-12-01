@@ -30,6 +30,16 @@ def decompose_one_vertex(graph: nx.Graph, select_vertex) -> int:
     node_reduced = len(G) - len(G1) - len(G2)
     return node_reduced
 
+def decompose_separator(graph: nx.Graph, select_vertex_separator) -> int:
+    """Decompose the graph via vertex separator and return the average node reduction"""
+    graph = remove_zero_degree_nodes(graph.copy())
+    lb,ub = mc_lower_bound(graph), mc_upper_bound(graph)
+    separator = select_vertex_separator(graph)
+    decomposed_graphs = decompose_graph(graph, separator)
+    decomposed_graphs = [ k_core_reduction(g, len(lb)) for g in decomposed_graphs ]
+    node_reduced = len(graph) - sum([len(g) for g in decomposed_graphs])
+    return node_reduced
+    
 def get_vertex_select_func(method):
     if method == 'random':
         return random_vertex
@@ -89,7 +99,7 @@ if __name__ == "__main__":
     import itertools
     
     _root = os.path.dirname(os.path.abspath(__file__))
-    stats = pd.read_csv(os.path.join(_root,'bench_stats.csv'),index_col=0)
+    stats = pd.read_csv(os.path.join(_root,'bench_stats.csv'),index_col=False)
     
     for density in [0.1,0.5]:
         plt.figure(figsize=(8,6))
