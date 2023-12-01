@@ -1,0 +1,7 @@
+networkx==2.8.4
+torch==1.13.1
+numpy
+torch-geometric==2.3.0
+tqdm
+tensorboard
+matplotlib
