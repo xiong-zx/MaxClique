@@ -59,5 +59,3 @@ for n, d in itertools.product(nodes, density):
 
         max_cliques = pd.DataFrame.from_dict(max_cliques, orient='index', columns=['max_clique'])
         max_cliques.to_csv(os.path.join(root_dir,f"examples/{n}/{d}/max_cliques.csv"))
-
-# %%

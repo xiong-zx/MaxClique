@@ -11,7 +11,7 @@ import itertools
 import pandas as pd
 
 from utils import *
-# %%
+
 def decompose_one_vertex(graph: nx.Graph, select_vertex) -> int:
     """
     Decompose the graph and return the average node reduction
@@ -28,7 +28,7 @@ def decompose_one_vertex(graph: nx.Graph, select_vertex) -> int:
     G1, G2 = remove_zero_degree_nodes(G1), remove_zero_degree_nodes(G2)
     G1, G2 = k_core_reduction(G1, len(lb) - 1), k_core_reduction(G2, len(lb))
     node_reduced = len(G) - len(G1) - len(G2)
-    return node_reduced
+    return node_reduced, min(len(G1),len(G2))
 
 def decompose_separator(graph: nx.Graph, select_vertex_separator) -> int:
     """Decompose the graph via vertex separator and return the average node reduction"""
@@ -49,12 +49,12 @@ def get_vertex_select_func(method):
         return lowest_degree_vertex
     else:
         raise ValueError(f'Unknown method: {method}')
-# %%
+# %% solve using DBK
 if __name__ == "__main__":
-    _root = os.path.dirname(os.path.abspath(__file__))
+    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-    size_list = [50,100,150,200,250,300,400,500,600,700,800,900,1000,1500,2000] 
-    density_list = [0.1,0.5]
+    size_list = [200] 
+    density_list = [0.1]
     vertex_select_strategy = ['random','highest','lowest']
     N = 100
     if os.path.exists(os.path.join(_root,'bench_stats.csv')):
@@ -80,25 +80,29 @@ if __name__ == "__main__":
         print(f'\nSize: {size}\nDensity: {density}\nVertex select strategy: {vertex_select_strategy}')
         
         node_reduced_list = []
+        separator_size_list = []
         for graph in tqdm.tqdm(data_list[:N]):
             G = nx.read_edgelist(graph, nodetype=int)
             G = remove_zero_degree_nodes(G)
-            node_reduced = decompose_one_vertex(G, get_vertex_select_func(vertex_select_strategy))
+            node_reduced, separator_size = decompose_one_vertex(G, get_vertex_select_func(vertex_select_strategy))
             node_reduced_list.append(node_reduced)
+            separator_size_list.append(separator_size)
+
             
-        stats.append((size, density, vertex_select_strategy, np.mean(node_reduced_list)))
+        stats.append([size, density, vertex_select_strategy, np.mean(node_reduced_list),np.mean(separator_size_list)])
         print(f'Average node reduced: {np.mean(node_reduced_list)}')
+        print(f'Average separator size: {np.mean(separator_size_list)}')
         
-    stats = pd.DataFrame(stats, columns=['size','density','vertex_select_strategy','node_reduced'])
+    stats = pd.DataFrame(stats, columns=['size','density','vertex_select_strategy','node_reduced','separator_size'])
     stats.to_csv(os.path.join(_root,'bench_stats.csv'),index=False)
-# %%
+# %% plot
 if __name__ == "__main__":
     import pandas as pd
     import matplotlib.pyplot as plt
     import os
     import itertools
     
-    _root = os.path.dirname(os.path.abspath(__file__))
+    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     stats = pd.read_csv(os.path.join(_root,'bench_stats.csv'),index_col=False)
     
     for density in [0.1,0.5]:
