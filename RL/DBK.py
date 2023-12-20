@@ -1,10 +1,13 @@
 import networkx as nx
 import random
+import torch
+import numpy as np
+import pickle
+import uuid
+from torch_geometric.utils.convert import from_networkx, to_networkx
 
-random.seed(11)
-import numpy
-
-numpy.random.seed(11)
+# random.seed(11)
+# np.random.seed(11)
 
 decomposition_cnt = 0
 leaf_subgraphs = []
@@ -85,7 +88,7 @@ def is_clique(G):
         return False
 
 
-def ch_partitioning(vertex, G):
+def ch_partitioning(vertex, G, vertex_selection_func=None):
     global decomposition_cnt
     """
 	INPUT:
@@ -97,12 +100,26 @@ def ch_partitioning(vertex, G):
 	"""
     decomposition_cnt += 1
     n = list(G.neighbors(vertex))
+    # original from DBK paper
     # Gp = []
     # for iter in list(G.edges()):
     #     if iter[0] in n:
     #         if iter[1] in n:
     #             Gp.append(iter)
-    # This is meant to fix lack of node features in Gp
+    # G.remove_node(vertex)
+    # return nx.Graph(Gp), G
+
+    # This is meant to fix lack of node features in Gp => not computing node features again which is wrong
+    # Gp = nx.Graph()
+    # for iter in list(G.edges()):
+    #     if iter[0] in n:
+    #         if iter[1] in n:
+    #             Gp.add_node(iter[0], x=G.nodes[iter[0]]['x'])
+    #             Gp.add_node(iter[1], x=G.nodes[iter[1]]['x'])
+    #             Gp.add_edge(iter[0], iter[1])
+    # G.remove_node(vertex)
+
+    # Computes node features again
     Gp = nx.Graph()
     for iter in list(G.edges()):
         if iter[0] in n:
@@ -111,8 +128,27 @@ def ch_partitioning(vertex, G):
                 Gp.add_node(iter[1], x=G.nodes[iter[1]]['x'])
                 Gp.add_edge(iter[0], iter[1])
     G.remove_node(vertex)
-    # return nx.Graph(Gp), G
+
+    # pyg_G = from_networkx(G)
+    # pyg_Gp = from_networkx(Gp)
+    # pyg_G.x = get_features(G)
+    # pyg_Gp.x = get_features(Gp)
+    # new_G = to_networkx(pyg_G, ['x'], None, None, True)
+    # new_Gp = to_networkx(pyg_Gp, ['x'], None, None, True)
+
+    if vertex_selection_func not in ['RAND','MIN','MAX']: # features are not recomputed for RAND, MIN, MAX
+        G_features = get_features(G)
+        for node in G.nodes():
+            node_idx = list(G.nodes()).index(node)
+            G.nodes[node]['x'] = G_features[node_idx]
+        Gp_features = get_features(Gp)
+        for node in Gp.nodes():
+            node_idx = list(Gp.nodes()).index(node)
+            Gp.nodes[node]['x'] = Gp_features[node_idx]
+
+
     return Gp, G
+
 
 def lowest_degree_vertex(graph):
     """
@@ -127,6 +163,7 @@ def lowest_degree_vertex(graph):
         if graph.degree(i) == minimum:
             return i
 
+
 def highest_degree_vertex(graph):
     """
 	INPUT:
@@ -139,6 +176,7 @@ def highest_degree_vertex(graph):
     for i in list(graph.nodes()):
         if graph.degree(i) == maximum:
             return i
+
 
 def random_vertex_selection(graph):
     """
@@ -169,8 +207,80 @@ def remove_zero_degree_nodes(graph):
     return graph
 
 
+def get_features(nxgraph):
+    # get features
+    num_nodes = nxgraph.number_of_nodes()
+    num_edges = nxgraph.number_of_edges()
+    node_degrees = dict(nxgraph.degree())
+
+    uid = uuid.uuid4()
+
+    try:
+        degree_centrality = nx.degree_centrality(nxgraph)
+    except:
+        pickle.dump(nxgraph, open(f"errors/error_degree_centrality_{uid}.pickle", "wb"))
+        degree_centrality = [-1] * num_nodes
+
+    try:
+        betweenness_centrality = nx.betweenness_centrality(nxgraph)
+    except:
+        pickle.dump(nxgraph, open(f"errors/error_betweenness_centrality_{uid}.pickle", "wb"))
+        betweenness_centrality = [-1] * num_nodes
+
+    try:
+        closeness_centrality = nx.closeness_centrality(nxgraph)
+    except:
+        pickle.dump(nxgraph, open(f"errors/error_closeness_centrality_{uid}.pickle", "wb"))
+        closeness_centrality = [-1] * num_nodes
+
+    try:
+        eigenvector_centrality = nx.eigenvector_centrality(nxgraph)
+    except:
+        pickle.dump(nxgraph, open(f"errors/error_eigenvector_centrality_{uid}.pickle", "wb"))
+        eigenvector_centrality = [-1] * num_nodes
+
+    try:
+        pagerank_centrality = nx.pagerank(nxgraph)
+    except:
+        pickle.dump(nxgraph, open(f"errors/error_pagerank_centrality_{uid}.pickle", "wb"))
+        pagerank_centrality = [-1] * num_nodes
+
+    try:
+        harmonic_centrality = nx.harmonic_centrality(nxgraph)
+    except:
+        pickle.dump(nxgraph, open(f"errors/error_harmonic_centrality_{uid}.pickle", "wb"))
+        harmonic_centrality = [-1] * num_nodes
+
+    try:
+        load_centrality = nx.load_centrality(nxgraph)
+    except:
+        pickle.dump(nxgraph, open(f"errors/error_load_centrality_{uid}.pickle", "wb"))
+        load_centrality = [-1] * num_nodes
+
+    try:
+        clustering_coefficient = nx.clustering(nxgraph)
+    except:
+        pickle.dump(nxgraph, open(f"errors/error_clustering_coefficient_{uid}.pickle", "wb"))
+        clustering_coefficient = [-1] * num_nodes
+    # make it into an array
+    features_array = np.array([
+        [num_nodes] * num_nodes,
+        [num_edges] * num_nodes,
+        list(node_degrees.values()),
+        list(degree_centrality.values()) if not isinstance(degree_centrality, list) else degree_centrality,
+        list(betweenness_centrality.values()) if not isinstance(betweenness_centrality, list) else betweenness_centrality,
+        list(closeness_centrality.values()) if not isinstance(closeness_centrality, list) else closeness_centrality,
+        list(eigenvector_centrality.values()) if not isinstance(eigenvector_centrality, list) else eigenvector_centrality,
+        list(pagerank_centrality.values()) if not isinstance(pagerank_centrality, list) else pagerank_centrality,
+        list(harmonic_centrality.values()) if not isinstance(harmonic_centrality, list) else harmonic_centrality,
+        list(load_centrality.values()) if not isinstance(load_centrality, list) else load_centrality,
+        list(clustering_coefficient.values()) if not isinstance(clustering_coefficient, list) else clustering_coefficient])
+    features_array = features_array.T  # feature for each node is a row
+    return torch.tensor(features_array)
+
+
 def DBK(graph, LIMIT, solver_function, vertex_selection_func=None):
-    global decomposition_cnt,leaf_subgraphs
+    global decomposition_cnt, leaf_subgraphs
     decomposition_cnt = 0
     leaf_subgraphs = []
     """
@@ -215,6 +325,12 @@ def DBK(graph, LIMIT, solver_function, vertex_selection_func=None):
     vertex_removal = {graph: []}
     subgraphs = [graph]
     while len(subgraphs) != 0:
+
+        # Todo: This timeout is to make runtime more predictable and realistic for the final report
+        if decomposition_cnt >= 10000: # we consider more than this as outlier
+            print("=== Timeout ===")
+            return k, decomposition_cnt, leaf_subgraphs
+
         SG = subgraphs.pop()  # Todo: this is where your subgraph gets selected - smart selection can help pruning
         SG = remove_zero_degree_nodes(SG)
         assert len(SG) != 0
@@ -229,7 +345,7 @@ def DBK(graph, LIMIT, solver_function, vertex_selection_func=None):
         else:
             vertex = smart_vertex_selection(SG, vertex_selection_func)
         # print("=== Partitioning Subgraph ===")
-        SSG, SG = ch_partitioning(vertex, SG)
+        SSG, SG = ch_partitioning(vertex, SG, vertex_selection_func)
         SG = remove_zero_degree_nodes(SG)
         SSG = remove_zero_degree_nodes(SSG)
         SG = k_core_reduction(SG, len(k) - len(

@@ -22,6 +22,7 @@ class GCN(torch.nn.Module): # Q(s,a) => s graph, a node
 
     def forward(self, nx_graph):
         pyg_graph = from_networkx(nx_graph) # Todo: check if pyg_graph is ok after decomposition and conversion from networkx
+        pyg_graph.x = pyg_graph.x.type('torch.FloatTensor')
         x = self.conv1(pyg_graph.x, pyg_graph.edge_index)
         x = x.relu()
         if self.dropout is not None:
